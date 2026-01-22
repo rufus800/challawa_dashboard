@@ -2584,16 +2584,25 @@ if __name__ == '__main__':
     
     # Start monitoring
     monitor.start()
-    
+
     try:
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("  Challawa Monitoring System")
-        print("="*50)
+        print("=" * 50)
         print(f"  PLC: {PLC_IP}")
-        print(f"  Dashboard: http://localhost:5000")
-        print("="*50 + "\n")
-        
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+        print("  Local Dashboard: http://127.0.0.1:5000")
+        print("  Public Dashboard: https://challawaop.akfotekengineering.com")
+        print("=" * 50 + "\n")
+
+        socketio.run(
+            app,
+            host="0.0.0.0",
+            port=5000,
+            debug=False,
+            allow_unsafe_werkzeug=True
+        )
+
     except KeyboardInterrupt:
         print("\nShutting down...")
         monitor.stop()
+
