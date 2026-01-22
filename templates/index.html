@@ -1,0 +1,857 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Challawa Monitoring System</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary: #3498db;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --dark: #1a1a2e;
+            --darker: #0f0f1a;
+            --card-bg: #16213e;
+            --border: #2d3748;
+            --text: #e2e8f0;
+            --text-muted: #a0aec0;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--darker);
+            min-height: 100vh;
+            color: var(--text);
+            line-height: 1.5;
+        }
+        
+        /* Navigation */
+        .navbar {
+            background: var(--dark);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .nav-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+        }
+        
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        
+        .nav-brand svg {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            background: var(--card-bg);
+            color: var(--primary);
+        }
+        
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-badge.connected {
+            background: rgba(39, 174, 96, 0.15);
+            color: var(--success);
+        }
+        
+        .status-badge.disconnected {
+            background: rgba(231, 76, 60, 0.15);
+            color: var(--danger);
+        }
+        
+        .status-badge.alarm {
+            background: rgba(231, 76, 60, 0.2);
+            color: var(--danger);
+            animation: pulse-alarm 1s infinite;
+        }
+        
+        @keyframes pulse-alarm {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        
+        /* Main Content */
+        .main-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .page-header {
+            margin-bottom: 24px;
+        }
+        
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .page-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+        
+        /* Pump Grid */
+        .pump-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+        
+        /* Pump Card */
+        .pump-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .pump-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .pump-card.trip {
+            border-color: var(--danger);
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.2);
+        }
+        
+        .pump-card.running {
+            border-color: var(--success);
+        }
+        
+        .pump-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .pump-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+        
+        .pump-status {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .pump-status.running {
+            background: rgba(39, 174, 96, 0.15);
+            color: var(--success);
+        }
+        
+        .pump-status.ready {
+            background: rgba(243, 156, 18, 0.15);
+            color: var(--warning);
+        }
+        
+        .pump-status.trip {
+            background: rgba(231, 76, 60, 0.15);
+            color: var(--danger);
+        }
+        
+        .pump-status.offline {
+            background: rgba(160, 174, 192, 0.15);
+            color: var(--text-muted);
+        }
+        
+        .pump-body {
+            padding: 16px;
+            display: flex;
+            gap: 16px;
+        }
+        
+        /* Gauge */
+        .gauge-wrapper {
+            flex: 0 0 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .gauge {
+            width: 100px;
+            height: 100px;
+            position: relative;
+        }
+        
+        .gauge svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        
+        .gauge-bg {
+            fill: none;
+            stroke: var(--border);
+            stroke-width: 8;
+        }
+        
+        .gauge-fill {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 8;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s ease, stroke 0.3s;
+        }
+        
+        .gauge-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        
+        .gauge-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+        
+        .gauge-unit {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        
+        /* Info Panel */
+        .info-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+        
+        .info-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        
+        .info-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        /* Status Indicators */
+        .status-indicators {
+            display: flex;
+            gap: 8px;
+            padding-top: 8px;
+        }
+        
+        .indicator {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: all 0.3s;
+        }
+        
+        .indicator .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+            transition: all 0.3s;
+        }
+        
+        .indicator.active .dot {
+            box-shadow: 0 0 10px currentColor;
+        }
+        
+        .indicator.ready.active {
+            color: var(--warning);
+            background: rgba(243, 156, 18, 0.1);
+        }
+        
+        .indicator.ready.active .dot {
+            background: var(--warning);
+        }
+        
+        .indicator.running.active {
+            color: var(--success);
+            background: rgba(39, 174, 96, 0.1);
+        }
+        
+        .indicator.running.active .dot {
+            background: var(--success);
+        }
+        
+        .indicator.trip.active {
+            color: var(--danger);
+            background: rgba(231, 76, 60, 0.1);
+            animation: blink 0.5s infinite;
+        }
+        
+        .indicator.trip.active .dot {
+            background: var(--danger);
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-container {
+                flex-wrap: wrap;
+                height: auto;
+                padding: 12px 0;
+                gap: 12px;
+            }
+            
+            .nav-brand {
+                font-size: 1.1rem;
+            }
+            
+            .nav-links {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .pump-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .pump-body {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .gauge-wrapper {
+                flex: none;
+            }
+            
+            .info-panel {
+                width: 100%;
+            }
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                </svg>
+                Challawa Monitoring
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link active">Dashboard</a>
+                <a href="/reports" class="nav-link">Reports</a>
+            </div>
+            <div class="nav-status">
+                <div class="status-badge alarm" id="alarmBadge" style="display: none;">
+                    <span class="status-dot"></span>
+                    <span>ALARM</span>
+                </div>
+                <div class="status-badge disconnected" id="connectionBadge">
+                    <span class="status-dot"></span>
+                    <span id="connectionText">Disconnected</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <main class="main-content">
+        <div class="page-header">
+            <h1 class="page-title">Pump Monitoring Dashboard</h1>
+            <p class="page-subtitle">Real-time status of all cooling system pumps</p>
+        </div>
+        
+        <div class="pump-grid">
+            <!-- Pump 1 -->
+            <div class="pump-card" id="pump1Card">
+                <div class="pump-header">
+                    <span class="pump-name">Line 7 Blow Mould</span>
+                    <span class="pump-status offline" id="p1Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p1Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p1Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p1Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p1Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p1Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p1Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pump 2 -->
+            <div class="pump-card" id="pump2Card">
+                <div class="pump-header">
+                    <span class="pump-name">Line 7 Blow Mould Spare</span>
+                    <span class="pump-status offline" id="p2Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p2Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p2Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p2Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p2Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p2Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p2Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pump 3 -->
+            <div class="pump-card" id="pump3Card">
+                <div class="pump-header">
+                    <span class="pump-name">Greenfield LV/UPS/BRFC/ACU</span>
+                    <span class="pump-status offline" id="p3Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p3Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p3Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p3Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p3Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p3Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p3Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pump 4 -->
+            <div class="pump-card" id="pump4Card">
+                <div class="pump-header">
+                    <span class="pump-name">Can Line UPS Room AHU2</span>
+                    <span class="pump-status offline" id="p4Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p4Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p4Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p4Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p4Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p4Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p4Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pump 5 -->
+            <div class="pump-card" id="pump5Card">
+                <div class="pump-header">
+                    <span class="pump-name">Line 3&5 UPS Fan Coil Units</span>
+                    <span class="pump-status offline" id="p5Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p5Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p5Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p5Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p5Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p5Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p5Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pump 6 -->
+            <div class="pump-card" id="pump6Card">
+                <div class="pump-header">
+                    <span class="pump-name">Can Line UPS Room AHU 1</span>
+                    <span class="pump-status offline" id="p6Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p6Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p6Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p6Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p6Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p6Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p6Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pump 7 -->
+            <div class="pump-card" id="pump7Card">
+                <div class="pump-header">
+                    <span class="pump-name">Greenfield LV/UPS Room AHU 1&2</span>
+                    <span class="pump-status offline" id="p7Status">Offline</span>
+                </div>
+                <div class="pump-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge">
+                            <svg viewBox="0 0 100 100">
+                                <circle class="gauge-bg" cx="50" cy="50" r="40"/>
+                                <circle class="gauge-fill" id="p7Gauge" cx="50" cy="50" r="40" 
+                                    stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+                            </svg>
+                            <div class="gauge-center">
+                                <div class="gauge-value" id="p7Pressure">0.00</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="info-panel">
+                        <div class="info-row">
+                            <span class="info-label">Setpoint</span>
+                            <span class="info-value" id="p7Setpoint">0.00 bar</span>
+                        </div>
+                        <div class="status-indicators">
+                            <div class="indicator ready" id="p7Ready">
+                                <span class="dot"></span>Ready
+                            </div>
+                            <div class="indicator running" id="p7Running">
+                                <span class="dot"></span>Run
+                            </div>
+                            <div class="indicator trip" id="p7Trip">
+                                <span class="dot"></span>Trip
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <footer class="footer">
+        Challawa Monitoring System &copy; 2026 | Real-time PLC Data
+    </footer>
+    
+    <script>
+        const socket = io();
+        const maxPressure = 10;
+        const circumference = 2 * Math.PI * 40; // 251.2
+        
+        function updateGauge(gaugeId, value) {
+            const gauge = document.getElementById(gaugeId);
+            if (!gauge) return;
+            const percent = Math.min(value / maxPressure, 1);
+            const offset = circumference * (1 - percent);
+            gauge.style.strokeDashoffset = offset;
+            
+            // Color based on value
+            if (percent > 0.8) {
+                gauge.style.stroke = '#e74c3c';
+            } else if (percent > 0.6) {
+                gauge.style.stroke = '#f39c12';
+            } else {
+                gauge.style.stroke = '#3498db';
+            }
+        }
+        
+        function updatePumpCard(pumpNum, data, prefix) {
+            const card = document.getElementById('pump' + pumpNum + 'Card');
+            const status = document.getElementById('p' + pumpNum + 'Status');
+            const pressure = document.getElementById('p' + pumpNum + 'Pressure');
+            const setpoint = document.getElementById('p' + pumpNum + 'Setpoint');
+            const ready = document.getElementById('p' + pumpNum + 'Ready');
+            const running = document.getElementById('p' + pumpNum + 'Running');
+            const trip = document.getElementById('p' + pumpNum + 'Trip');
+            
+            // Get data values
+            const pressureVal = pumpNum === 1 ? data.pressure : data[prefix + '_pressure'];
+            const setpointVal = pumpNum === 1 ? data.pressure_setpoint : data[prefix + '_pressure_setpoint'];
+            const isReady = pumpNum === 1 ? data.ready_yellow : data[prefix + '_ready_yellow'];
+            const isRunning = pumpNum === 1 ? data.running_green : data[prefix + '_running_green'];
+            const isTrip = pumpNum === 1 ? data.trip_red : data[prefix + '_trip_red'];
+            
+            // Update pressure gauge
+            pressure.textContent = (pressureVal || 0).toFixed(2);
+            updateGauge('p' + pumpNum + 'Gauge', pressureVal || 0);
+            
+            // Update setpoint
+            setpoint.textContent = (setpointVal || 0).toFixed(2) + ' bar';
+            
+            // Update indicators
+            ready.classList.toggle('active', isReady);
+            running.classList.toggle('active', isRunning);
+            trip.classList.toggle('active', isTrip);
+            
+            // Update card status
+            card.classList.remove('trip', 'running');
+            status.classList.remove('trip', 'running', 'ready', 'offline');
+            
+            if (isTrip) {
+                card.classList.add('trip');
+                status.classList.add('trip');
+                status.textContent = 'TRIP';
+            } else if (isRunning) {
+                card.classList.add('running');
+                status.classList.add('running');
+                status.textContent = 'Running';
+            } else if (isReady) {
+                status.classList.add('ready');
+                status.textContent = 'Ready';
+            } else {
+                status.classList.add('offline');
+                status.textContent = 'Offline';
+            }
+        }
+        
+        function updateStatus(data) {
+            // Connection status
+            const badge = document.getElementById('connectionBadge');
+            const text = document.getElementById('connectionText');
+            
+            if (data.connected) {
+                badge.classList.remove('disconnected');
+                badge.classList.add('connected');
+                text.textContent = 'Connected';
+            } else {
+                badge.classList.remove('connected');
+                badge.classList.add('disconnected');
+                text.textContent = 'Disconnected';
+            }
+            
+            // Update all pumps
+            updatePumpCard(1, data, '');
+            updatePumpCard(2, data, 'p2');
+            updatePumpCard(3, data, 'p3');
+            updatePumpCard(4, data, 'p4');
+            updatePumpCard(5, data, 'p5');
+            updatePumpCard(6, data, 'p6');
+            updatePumpCard(7, data, 'p7');
+            
+            // Check for any alarms
+            const hasAlarm = data.trip_red || data.p2_trip_red || data.p3_trip_red || 
+                           data.p4_trip_red || data.p5_trip_red || data.p6_trip_red || data.p7_trip_red;
+            const alarmBadge = document.getElementById('alarmBadge');
+            alarmBadge.style.display = hasAlarm ? 'flex' : 'none';
+        }
+        
+        socket.on('pump_data', updateStatus);
+        
+        // Initial fetch
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(updateStatus);
+    </script>
+</body>
+</html>
