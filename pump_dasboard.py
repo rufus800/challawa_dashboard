@@ -1594,9 +1594,68 @@ HTML_TEMPLATE = '''
     </footer>
     
     <script>
-        const socket = io();
+        // Socket.IO with Cloudflare-compatible settings
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            rememberUpgrade: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
+        
         const maxPressure = 10;
         const circumference = 2 * Math.PI * 40; // 251.2
+        
+        // Fallback polling for when WebSocket fails
+        let lastUpdate = Date.now();
+        let pollingInterval = null;
+        
+        function startPollingFallback() {
+            if (pollingInterval) return;
+            console.log('Starting polling fallback...');
+            pollingInterval = setInterval(() => {
+                fetch('/api/status')
+                    .then(r => r.json())
+                    .then(data => {
+                        updateStatus(data);
+                        lastUpdate = Date.now();
+                    })
+                    .catch(err => console.error('Polling error:', err));
+            }, 1000);
+        }
+        
+        function stopPollingFallback() {
+            if (pollingInterval) {
+                console.log('Stopping polling fallback, WebSocket active');
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+        }
+        
+        // Monitor for stale data and activate polling
+        setInterval(() => {
+            if (Date.now() - lastUpdate > 3000 && !pollingInterval) {
+                startPollingFallback();
+            }
+        }, 2000);
+        
+        socket.on('connect', () => {
+            console.log('WebSocket connected');
+            stopPollingFallback();
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('WebSocket disconnected');
+            startPollingFallback();
+        });
+        
+        socket.on('connect_error', (err) => {
+            console.log('WebSocket error:', err.message);
+            startPollingFallback();
+        });
         
         function updateGauge(gaugeId, value) {
             const gauge = document.getElementById(gaugeId);
@@ -1695,12 +1754,26 @@ HTML_TEMPLATE = '''
             alarmBadge.style.display = hasAlarm ? 'flex' : 'none';
         }
         
-        socket.on('pump_data', updateStatus);
+        socket.on('pump_data', (data) => {
+            updateStatus(data);
+            lastUpdate = Date.now();
+            stopPollingFallback();
+        });
         
         // Initial fetch
         fetch('/api/status')
             .then(r => r.json())
-            .then(updateStatus);
+            .then(data => {
+                updateStatus(data);
+                lastUpdate = Date.now();
+            });
+        
+        // Start polling as initial fallback
+        setTimeout(() => {
+            if (Date.now() - lastUpdate > 2000) {
+                startPollingFallback();
+            }
+        }, 2000);
     </script>
 </body>
 </html>
