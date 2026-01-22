@@ -28,7 +28,9 @@ PLC_IP = "192.168.200.25"
 PLC_RACK = 0
 PLC_SLOT = 1
 DB_NUMBER = 39
-CYCLE_TIME = 0.5  # 500ms
+CYCLE_TIME = 1.0  # 1 second (increased from 500ms to reduce "Job pending" errors)
+MAX_RETRIES = 3
+RETRY_DELAY = 0.5  # seconds between retries
 
 # Pump names mapping
 PUMP_NAMES = {
@@ -86,9 +88,12 @@ class PumpMonitor:
         self.plc = snap7.client.Client()
         self.connected = False
         self.running = False
+        self.lock = threading.Lock()  # Prevent concurrent PLC access
         
     def connect(self):
         try:
+            if self.plc.get_connected():
+                self.plc.disconnect()
             self.plc.connect(PLC_IP, PLC_RACK, PLC_SLOT)
             self.connected = True
             print(f"✓ Connected to PLC at {PLC_IP}")
@@ -98,119 +103,154 @@ class PumpMonitor:
             self.connected = False
             return False
     
-    def read_db39(self):
-        """Read data from DB39"""
+    def reconnect(self):
+        """Force reconnection to PLC"""
         try:
-            # Read 70 bytes from DB39 starting at byte 0 (covers Pump 1, 2, 3, 4, 5, 6 and 7)
-            data = self.plc.db_read(DB_NUMBER, 0, 70)
+            if self.plc.get_connected():
+                self.plc.disconnect()
+        except:
+            pass
+        time.sleep(0.5)
+        return self.connect()
+    
+    def read_db39(self):
+        """Read data from DB39 with retry logic"""
+        with self.lock:  # Prevent concurrent access
+            for attempt in range(MAX_RETRIES):
+                try:
+                    # Read 70 bytes from DB39 starting at byte 0 (covers Pump 1, 2, 3, 4, 5, 6 and 7)
+                    data = self.plc.db_read(DB_NUMBER, 0, 70)
             
-            # Parse Pump 1 data
-            alarm = get_bool(data, 0, 0)
-            ready_yellow = get_bool(data, 0, 1)
-            running_green = get_bool(data, 0, 2)
-            trip_red = get_bool(data, 0, 3)
-            pressure = get_real(data, 2)
-            pressure_sp = get_real(data, 6)
+                    # Parse Pump 1 data
+                    alarm = get_bool(data, 0, 0)
+                    ready_yellow = get_bool(data, 0, 1)
+                    running_green = get_bool(data, 0, 2)
+                    trip_red = get_bool(data, 0, 3)
+                    pressure = get_real(data, 2)
+                    pressure_sp = get_real(data, 6)
+                    
+                    # Parse Pump 2 data
+                    p2_ready_yellow = get_bool(data, 10, 0)
+                    p2_running_green = get_bool(data, 10, 1)
+                    p2_trip_red = get_bool(data, 10, 2)
+                    p2_pressure = get_real(data, 12)
+                    p2_pressure_sp = get_real(data, 16)
+                    
+                    # Parse Pump 3 data
+                    p3_ready_yellow = get_bool(data, 20, 0)
+                    p3_running_green = get_bool(data, 20, 1)
+                    p3_trip_red = get_bool(data, 20, 2)
+                    p3_pressure = get_real(data, 22)
+                    p3_pressure_sp = get_real(data, 26)
+                    
+                    # Parse Pump 4 data (note: bit order is Ready=0, Trip=1, Running=2)
+                    p4_ready_yellow = get_bool(data, 30, 0)
+                    p4_trip_red = get_bool(data, 30, 1)
+                    p4_running_green = get_bool(data, 30, 2)
+                    p4_pressure = get_real(data, 32)
+                    p4_pressure_sp = get_real(data, 36)
+                    
+                    # Parse Pump 5 data (note: bit order is Running=0, Ready=1, Trip=2)
+                    p5_running_green = get_bool(data, 40, 0)
+                    p5_ready_yellow = get_bool(data, 40, 1)
+                    p5_trip_red = get_bool(data, 40, 2)
+                    p5_pressure = get_real(data, 42)
+                    p5_pressure_sp = get_real(data, 46)
+                    
+                    # Parse Pump 6 data (Ready=0, Running=1, Trip=2)
+                    p6_ready_yellow = get_bool(data, 50, 0)
+                    p6_running_green = get_bool(data, 50, 1)
+                    p6_trip_red = get_bool(data, 50, 2)
+                    p6_pressure = get_real(data, 52)
+                    p6_pressure_sp = get_real(data, 56)
+                    
+                    # Parse Pump 7 data (Ready=0, Running=1, Trip=2)
+                    p7_ready_yellow = get_bool(data, 60, 0)
+                    p7_running_green = get_bool(data, 60, 1)
+                    p7_trip_red = get_bool(data, 60, 2)
+                    p7_pressure = get_real(data, 62)
+                    p7_pressure_sp = get_real(data, 66)
+                    
+                    # Mutually exclusive status logic
+                    status = "READY" if ready_yellow else ("RUNNING" if running_green else ("TRIP" if trip_red else "UNKNOWN"))
+                    p2_status = "READY" if p2_ready_yellow else ("RUNNING" if p2_running_green else ("TRIP" if p2_trip_red else "UNKNOWN"))
+                    p3_status = "READY" if p3_ready_yellow else ("RUNNING" if p3_running_green else ("TRIP" if p3_trip_red else "UNKNOWN"))
+                    p4_status = "READY" if p4_ready_yellow else ("RUNNING" if p4_running_green else ("TRIP" if p4_trip_red else "UNKNOWN"))
+                    p5_status = "READY" if p5_ready_yellow else ("RUNNING" if p5_running_green else ("TRIP" if p5_trip_red else "UNKNOWN"))
+                    p6_status = "READY" if p6_ready_yellow else ("RUNNING" if p6_running_green else ("TRIP" if p6_trip_red else "UNKNOWN"))
+                    p7_status = "READY" if p7_ready_yellow else ("RUNNING" if p7_running_green else ("TRIP" if p7_trip_red else "UNKNOWN"))
+                    
+                    return {
+                        "alarm": alarm,
+                        "ready_yellow": ready_yellow,
+                        "running_green": running_green,
+                        "trip_red": trip_red,
+                        "pressure": round(pressure, 2),
+                        "pressure_setpoint": round(pressure_sp, 2),
+                        "status": status,
+                        "p2_ready_yellow": p2_ready_yellow,
+                        "p2_running_green": p2_running_green,
+                        "p2_trip_red": p2_trip_red,
+                        "p2_pressure": round(p2_pressure, 2),
+                        "p2_pressure_setpoint": round(p2_pressure_sp, 2),
+                        "p2_status": p2_status,
+                        "p3_ready_yellow": p3_ready_yellow,
+                        "p3_running_green": p3_running_green,
+                        "p3_trip_red": p3_trip_red,
+                        "p3_pressure": round(p3_pressure, 2),
+                        "p3_pressure_setpoint": round(p3_pressure_sp, 2),
+                        "p3_status": p3_status,
+                        "p4_ready_yellow": p4_ready_yellow,
+                        "p4_running_green": p4_running_green,
+                        "p4_trip_red": p4_trip_red,
+                        "p4_pressure": round(p4_pressure, 2),
+                        "p4_pressure_setpoint": round(p4_pressure_sp, 2),
+                        "p4_status": p4_status,
+                        "p5_ready_yellow": p5_ready_yellow,
+                        "p5_running_green": p5_running_green,
+                        "p5_trip_red": p5_trip_red,
+                        "p5_pressure": round(p5_pressure, 2),
+                        "p5_pressure_setpoint": round(p5_pressure_sp, 2),
+                        "p5_status": p5_status,
+                        "p6_ready_yellow": p6_ready_yellow,
+                        "p6_running_green": p6_running_green,
+                        "p6_trip_red": p6_trip_red,
+                        "p6_pressure": round(p6_pressure, 2),
+                        "p6_pressure_setpoint": round(p6_pressure_sp, 2),
+                        "p6_status": p6_status,
+                        "p7_ready_yellow": p7_ready_yellow,
+                        "p7_running_green": p7_running_green,
+                        "p7_trip_red": p7_trip_red,
+                        "p7_pressure": round(p7_pressure, 2),
+                        "p7_pressure_setpoint": round(p7_pressure_sp, 2),
+                        "p7_status": p7_status,
+                        "connected": True
+                    }
+                except Exception as e:
+                    error_msg = str(e)
+                    # Handle "Job pending" error - PLC is busy, wait and retry
+                    if isinstance(e.args[0], bytes) and b'Job pending' in e.args[0]:
+                        print(f"⚠ PLC busy (attempt {attempt + 1}/{MAX_RETRIES}), retrying...")
+                        time.sleep(RETRY_DELAY)
+                        continue
+                    elif 'Job pending' in error_msg:
+                        print(f"⚠ PLC busy (attempt {attempt + 1}/{MAX_RETRIES}), retrying...")
+                        time.sleep(RETRY_DELAY)
+                        continue
+                    # Handle connection errors - reconnect
+                    elif 'Unreachable' in error_msg or 'TCP' in error_msg or not self.plc.get_connected():
+                        print(f"⚠ Connection lost, reconnecting...")
+                        self.connected = False
+                        self.reconnect()
+                        time.sleep(RETRY_DELAY)
+                        continue
+                    else:
+                        print(f"Read error: {e}")
+                        break
             
-            # Parse Pump 2 data
-            p2_ready_yellow = get_bool(data, 10, 0)
-            p2_running_green = get_bool(data, 10, 1)
-            p2_trip_red = get_bool(data, 10, 2)
-            p2_pressure = get_real(data, 12)
-            p2_pressure_sp = get_real(data, 16)
-            
-            # Parse Pump 3 data
-            p3_ready_yellow = get_bool(data, 20, 0)
-            p3_running_green = get_bool(data, 20, 1)
-            p3_trip_red = get_bool(data, 20, 2)
-            p3_pressure = get_real(data, 22)
-            p3_pressure_sp = get_real(data, 26)
-            
-            # Parse Pump 4 data (note: bit order is Ready=0, Trip=1, Running=2)
-            p4_ready_yellow = get_bool(data, 30, 0)
-            p4_trip_red = get_bool(data, 30, 1)
-            p4_running_green = get_bool(data, 30, 2)
-            p4_pressure = get_real(data, 32)
-            p4_pressure_sp = get_real(data, 36)
-            
-            # Parse Pump 5 data (note: bit order is Running=0, Ready=1, Trip=2)
-            p5_running_green = get_bool(data, 40, 0)
-            p5_ready_yellow = get_bool(data, 40, 1)
-            p5_trip_red = get_bool(data, 40, 2)
-            p5_pressure = get_real(data, 42)
-            p5_pressure_sp = get_real(data, 46)
-            
-            # Parse Pump 6 data (Ready=0, Running=1, Trip=2)
-            p6_ready_yellow = get_bool(data, 50, 0)
-            p6_running_green = get_bool(data, 50, 1)
-            p6_trip_red = get_bool(data, 50, 2)
-            p6_pressure = get_real(data, 52)
-            p6_pressure_sp = get_real(data, 56)
-            
-            # Parse Pump 7 data (Ready=0, Running=1, Trip=2)
-            p7_ready_yellow = get_bool(data, 60, 0)
-            p7_running_green = get_bool(data, 60, 1)
-            p7_trip_red = get_bool(data, 60, 2)
-            p7_pressure = get_real(data, 62)
-            p7_pressure_sp = get_real(data, 66)
-            
-            # Mutually exclusive status logic
-            status = "READY" if ready_yellow else ("RUNNING" if running_green else ("TRIP" if trip_red else "UNKNOWN"))
-            p2_status = "READY" if p2_ready_yellow else ("RUNNING" if p2_running_green else ("TRIP" if p2_trip_red else "UNKNOWN"))
-            p3_status = "READY" if p3_ready_yellow else ("RUNNING" if p3_running_green else ("TRIP" if p3_trip_red else "UNKNOWN"))
-            p4_status = "READY" if p4_ready_yellow else ("RUNNING" if p4_running_green else ("TRIP" if p4_trip_red else "UNKNOWN"))
-            p5_status = "READY" if p5_ready_yellow else ("RUNNING" if p5_running_green else ("TRIP" if p5_trip_red else "UNKNOWN"))
-            p6_status = "READY" if p6_ready_yellow else ("RUNNING" if p6_running_green else ("TRIP" if p6_trip_red else "UNKNOWN"))
-            p7_status = "READY" if p7_ready_yellow else ("RUNNING" if p7_running_green else ("TRIP" if p7_trip_red else "UNKNOWN"))
-            
-            return {
-                "alarm": alarm,
-                "ready_yellow": ready_yellow,
-                "running_green": running_green,
-                "trip_red": trip_red,
-                "pressure": round(pressure, 2),
-                "pressure_setpoint": round(pressure_sp, 2),
-                "status": status,
-                "p2_ready_yellow": p2_ready_yellow,
-                "p2_running_green": p2_running_green,
-                "p2_trip_red": p2_trip_red,
-                "p2_pressure": round(p2_pressure, 2),
-                "p2_pressure_setpoint": round(p2_pressure_sp, 2),
-                "p2_status": p2_status,
-                "p3_ready_yellow": p3_ready_yellow,
-                "p3_running_green": p3_running_green,
-                "p3_trip_red": p3_trip_red,
-                "p3_pressure": round(p3_pressure, 2),
-                "p3_pressure_setpoint": round(p3_pressure_sp, 2),
-                "p3_status": p3_status,
-                "p4_ready_yellow": p4_ready_yellow,
-                "p4_running_green": p4_running_green,
-                "p4_trip_red": p4_trip_red,
-                "p4_pressure": round(p4_pressure, 2),
-                "p4_pressure_setpoint": round(p4_pressure_sp, 2),
-                "p4_status": p4_status,
-                "p5_ready_yellow": p5_ready_yellow,
-                "p5_running_green": p5_running_green,
-                "p5_trip_red": p5_trip_red,
-                "p5_pressure": round(p5_pressure, 2),
-                "p5_pressure_setpoint": round(p5_pressure_sp, 2),
-                "p5_status": p5_status,
-                "p6_ready_yellow": p6_ready_yellow,
-                "p6_running_green": p6_running_green,
-                "p6_trip_red": p6_trip_red,
-                "p6_pressure": round(p6_pressure, 2),
-                "p6_pressure_setpoint": round(p6_pressure_sp, 2),
-                "p6_status": p6_status,
-                "p7_ready_yellow": p7_ready_yellow,
-                "p7_running_green": p7_running_green,
-                "p7_trip_red": p7_trip_red,
-                "p7_pressure": round(p7_pressure, 2),
-                "p7_pressure_setpoint": round(p7_pressure_sp, 2),
-                "p7_status": p7_status,
-                "connected": True
-            }
-        except Exception as e:
-            print(f"Read error: {e}")
+            # All retries failed, return error state
+            print(f"✗ Failed to read PLC after {MAX_RETRIES} attempts")
+            self.connected = False
             return {
                 "alarm": False,
                 "ready_yellow": False,
