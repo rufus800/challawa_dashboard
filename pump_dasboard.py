@@ -836,15 +836,24 @@ def generate_pdf():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Track connected clients (reduce log spam)
+connected_clients = 0
+
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected')
+    global connected_clients
+    connected_clients += 1
+    if connected_clients == 1:
+        print(f'Client connected (total: {connected_clients})')
     if monitor.connected:
         socketio.emit('pump_data', monitor.read_db39())
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print('Client disconnected')
+    global connected_clients
+    connected_clients = max(0, connected_clients - 1)
+    if connected_clients == 0:
+        print('All clients disconnected')
 
 # HTML Template (save as templates/index.html)
 HTML_TEMPLATE = '''
