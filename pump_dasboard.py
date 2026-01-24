@@ -18,6 +18,26 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+"""
+Challawa Monitoring System
+Real-time monitoring of Siemens S7-1200 PLC via Snap7
+"""
+
+from flask import Flask, render_template, jsonify, request, Response
+from flask_socketio import SocketIO
+import snap7
+from snap7.util import get_real, get_bool
+import struct
+import time
+import threading
+import sqlite3
+from datetime import datetime, timedelta
+import io
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'pump-monitor-secret'
