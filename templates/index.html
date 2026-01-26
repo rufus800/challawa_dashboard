@@ -461,7 +461,7 @@
             <!-- Pump 1 -->
             <div class="pump-card" id="pump1Card">
                 <div class="pump-header">
-                    <span class="pump-name">Line 7 Blow Mould</span>
+                    <span class="pump-name">LINE 3&5 UPS FAN COIL UNITS</span>
                     <span class="pump-status offline" id="p1Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -501,7 +501,7 @@
             <!-- Pump 2 -->
             <div class="pump-card" id="pump2Card">
                 <div class="pump-header">
-                    <span class="pump-name">Line 7 Blow Mould Spare</span>
+                    <span class="pump-name">CAN Line UPS Room AHU 1</span>
                     <span class="pump-status offline" id="p2Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -541,7 +541,7 @@
             <!-- Pump 3 -->
             <div class="pump-card" id="pump3Card">
                 <div class="pump-header">
-                    <span class="pump-name">Greenfield LV/UPS/BRFC/ACU</span>
+                    <span class="pump-name">GREENFIELD LV UPS ROOM</span>
                     <span class="pump-status offline" id="p3Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -581,7 +581,7 @@
             <!-- Pump 4 -->
             <div class="pump-card" id="pump4Card">
                 <div class="pump-header">
-                    <span class="pump-name">Can Line UPS Room AHU2</span>
+                    <span class="pump-name">CAN LINE UPS ROOM AHU 2</span>
                     <span class="pump-status offline" id="p4Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -621,7 +621,7 @@
             <!-- Pump 5 -->
             <div class="pump-card" id="pump5Card">
                 <div class="pump-header">
-                    <span class="pump-name">Line 3&5 UPS Fan Coil Units</span>
+                    <span class="pump-name">LINE 7 BLOW MOULD SPARE</span>
                     <span class="pump-status offline" id="p5Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -661,7 +661,7 @@
             <!-- Pump 6 -->
             <div class="pump-card" id="pump6Card">
                 <div class="pump-header">
-                    <span class="pump-name">Can Line UPS Room AHU 1</span>
+                    <span class="pump-name">GREENFIELD LV UPS ROOM AHU & 2</span>
                     <span class="pump-status offline" id="p6Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -701,7 +701,7 @@
             <!-- Pump 7 -->
             <div class="pump-card" id="pump7Card">
                 <div class="pump-header">
-                    <span class="pump-name">Greenfield LV/UPS Room AHU 1&2</span>
+                    <span class="pump-name">LINE 7 BLOWMOULD</span>
                     <span class="pump-status offline" id="p7Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -745,9 +745,68 @@
     </footer>
     
     <script>
-        const socket = io();
+        // Socket.IO with Cloudflare-compatible settings
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            rememberUpgrade: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
+        
         const maxPressure = 10;
         const circumference = 2 * Math.PI * 40; // 251.2
+        
+        // Fallback polling for when WebSocket fails
+        let lastUpdate = Date.now();
+        let pollingInterval = null;
+        
+        function startPollingFallback() {
+            if (pollingInterval) return;
+            console.log('Starting polling fallback...');
+            pollingInterval = setInterval(() => {
+                fetch('/api/status')
+                    .then(r => r.json())
+                    .then(data => {
+                        updateStatus(data);
+                        lastUpdate = Date.now();
+                    })
+                    .catch(err => console.error('Polling error:', err));
+            }, 1000);
+        }
+        
+        function stopPollingFallback() {
+            if (pollingInterval) {
+                console.log('Stopping polling fallback, WebSocket active');
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+        }
+        
+        // Monitor for stale data and activate polling
+        setInterval(() => {
+            if (Date.now() - lastUpdate > 3000 && !pollingInterval) {
+                startPollingFallback();
+            }
+        }, 2000);
+        
+        socket.on('connect', () => {
+            console.log('WebSocket connected');
+            stopPollingFallback();
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('WebSocket disconnected');
+            startPollingFallback();
+        });
+        
+        socket.on('connect_error', (err) => {
+            console.log('WebSocket error:', err.message);
+            startPollingFallback();
+        });
         
         function updateGauge(gaugeId, value) {
             const gauge = document.getElementById(gaugeId);
@@ -846,12 +905,26 @@
             alarmBadge.style.display = hasAlarm ? 'flex' : 'none';
         }
         
-        socket.on('pump_data', updateStatus);
+        socket.on('pump_data', (data) => {
+            updateStatus(data);
+            lastUpdate = Date.now();
+            stopPollingFallback();
+        });
         
         // Initial fetch
         fetch('/api/status')
             .then(r => r.json())
-            .then(updateStatus);
+            .then(data => {
+                updateStatus(data);
+                lastUpdate = Date.now();
+            });
+        
+        // Start polling as initial fallback
+        setTimeout(() => {
+            if (Date.now() - lastUpdate > 2000) {
+                startPollingFallback();
+            }
+        }, 2000);
     </script>
 </body>
 </html>

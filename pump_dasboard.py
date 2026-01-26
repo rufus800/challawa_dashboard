@@ -54,13 +54,13 @@ RETRY_DELAY = 0.5  # seconds between retries
 
 # Pump names mapping
 PUMP_NAMES = {
-    1: "Line 7 Blow Mould",
-    2: "Line 7 Blow Mould Spare",
-    3: "Greenfield LV/UPS/BRFC/ACU",
-    4: "Can Line UPS Room AHU2",
-    5: "Line 3&5 UPS Fan Coil Units",
-    6: "Can Line UPS Room AHU 1",
-    7: "Greenfield LV/UPS Room AHU 1&2"
+    1: "LINE 3&5 UPS FAN COIL UNITS",
+    2: "CAN Line UPS Room AHU 1",
+    3: "GREENFIELD LV UPS ROOM",
+    4: "CAN LINE UPS ROOM AHU 2",
+    5: "LINE 7 BLOW MOULD SPARE",
+    6: "GREENFIELD LV UPS ROOM AHU & 2",
+    7: "LINE 7 BLOWMOULD"
 }
 
 # Database initialization
@@ -138,10 +138,10 @@ class PumpMonitor:
         with self.lock:  # Prevent concurrent access
             for attempt in range(MAX_RETRIES):
                 try:
-                    # Read 70 bytes from DB39 starting at byte 0 (covers Pump 1, 2, 3, 4, 5, 6 and 7)
+                    # Read 70 bytes from DB39 starting at byte 0 (covers all pumps: LINE 3&5 UPS FAN COIL UNITS, CAN Line UPS Room AHU 1, GREENFIELD LV UPS ROOM, CAN LINE UPS ROOM AHU 2, LINE 7 BLOW MOULD SPARE, GREENFIELD LV UPS ROOM AHU & 2, LINE 7 BLOWMOULD)
                     data = self.plc.db_read(DB_NUMBER, 0, 70)
             
-                    # Parse Pump 1 data
+                    # Parse Pump 1 data (LINE 3&5 UPS FAN COIL UNITS)
                     alarm = get_bool(data, 0, 0)
                     ready_yellow = get_bool(data, 0, 1)
                     running_green = get_bool(data, 0, 2)
@@ -149,42 +149,42 @@ class PumpMonitor:
                     pressure = get_real(data, 2)
                     pressure_sp = get_real(data, 6)
                     
-                    # Parse Pump 2 data
+                    # Parse Pump 2 data (CAN Line UPS Room AHU 1)
                     p2_ready_yellow = get_bool(data, 10, 0)
                     p2_running_green = get_bool(data, 10, 1)
                     p2_trip_red = get_bool(data, 10, 2)
                     p2_pressure = get_real(data, 12)
                     p2_pressure_sp = get_real(data, 16)
                     
-                    # Parse Pump 3 data
+                    # Parse Pump 3 data (GREENFIELD LV UPS ROOM)
                     p3_ready_yellow = get_bool(data, 20, 0)
                     p3_running_green = get_bool(data, 20, 1)
                     p3_trip_red = get_bool(data, 20, 2)
                     p3_pressure = get_real(data, 22)
                     p3_pressure_sp = get_real(data, 26)
                     
-                    # Parse Pump 4 data (note: bit order is Ready=0, Trip=1, Running=2)
+                    # Parse Pump 4 data (CAN LINE UPS ROOM AHU 2, bit order: Ready=0, Trip=1, Running=2)
                     p4_ready_yellow = get_bool(data, 30, 0)
                     p4_trip_red = get_bool(data, 30, 1)
                     p4_running_green = get_bool(data, 30, 2)
                     p4_pressure = get_real(data, 32)
                     p4_pressure_sp = get_real(data, 36)
                     
-                    # Parse Pump 5 data (note: bit order is Running=0, Ready=1, Trip=2)
+                    # Parse Pump 5 data (LINE 7 BLOW MOULD SPARE, bit order: Running=0, Ready=1, Trip=2)
                     p5_running_green = get_bool(data, 40, 0)
                     p5_ready_yellow = get_bool(data, 40, 1)
                     p5_trip_red = get_bool(data, 40, 2)
                     p5_pressure = get_real(data, 42)
                     p5_pressure_sp = get_real(data, 46)
                     
-                    # Parse Pump 6 data (Ready=0, Running=1, Trip=2)
+                    # Parse Pump 6 data (GREENFIELD LV UPS ROOM AHU & 2, Ready=0, Running=1, Trip=2)
                     p6_ready_yellow = get_bool(data, 50, 0)
                     p6_running_green = get_bool(data, 50, 1)
                     p6_trip_red = get_bool(data, 50, 2)
                     p6_pressure = get_real(data, 52)
                     p6_pressure_sp = get_real(data, 56)
                     
-                    # Parse Pump 7 data (Ready=0, Running=1, Trip=2)
+                    # Parse Pump 7 data (LINE 7 BLOWMOULD, Ready=0, Running=1, Trip=2)
                     p7_ready_yellow = get_bool(data, 60, 0)
                     p7_running_green = get_bool(data, 60, 1)
                     p7_trip_red = get_bool(data, 60, 2)
@@ -1339,7 +1339,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 1 -->
             <div class="pump-card" id="pump1Card">
                 <div class="pump-header">
-                    <span class="pump-name">Line 7 Blow Mould</span>
+                    <span class="pump-name">LINE 3&5 UPS FAN COIL UNITS</span>
                     <span class="pump-status offline" id="p1Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -1379,7 +1379,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 2 -->
             <div class="pump-card" id="pump2Card">
                 <div class="pump-header">
-                    <span class="pump-name">Line 7 Blow Mould Spare</span>
+                    <span class="pump-name">CAN Line UPS Room AHU 1</span>
                     <span class="pump-status offline" id="p2Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -1419,7 +1419,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 3 -->
             <div class="pump-card" id="pump3Card">
                 <div class="pump-header">
-                    <span class="pump-name">Greenfield LV/UPS/BRFC/ACU</span>
+                    <span class="pump-name">GREENFIELD LV UPS ROOM</span>
                     <span class="pump-status offline" id="p3Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -1459,7 +1459,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 4 -->
             <div class="pump-card" id="pump4Card">
                 <div class="pump-header">
-                    <span class="pump-name">Can Line UPS Room AHU2</span>
+                    <span class="pump-name">CAN LINE UPS ROOM AHU 2</span>
                     <span class="pump-status offline" id="p4Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -1499,7 +1499,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 5 -->
             <div class="pump-card" id="pump5Card">
                 <div class="pump-header">
-                    <span class="pump-name">Line 3&5 UPS Fan Coil Units</span>
+                    <span class="pump-name">LINE 7 BLOW MOULD SPARE</span>
                     <span class="pump-status offline" id="p5Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -1539,7 +1539,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 6 -->
             <div class="pump-card" id="pump6Card">
                 <div class="pump-header">
-                    <span class="pump-name">Can Line UPS Room AHU 1</span>
+                    <span class="pump-name">GREENFIELD LV UPS ROOM AHU & 2</span>
                     <span class="pump-status offline" id="p6Status">Offline</span>
                 </div>
                 <div class="pump-body">
@@ -1579,7 +1579,7 @@ HTML_TEMPLATE = '''
             <!-- Pump 7 -->
             <div class="pump-card" id="pump7Card">
                 <div class="pump-header">
-                    <span class="pump-name">Greenfield LV/UPS Room AHU 1&2</span>
+                    <span class="pump-name">LINE 7 BLOWMOULD</span>
                     <span class="pump-status offline" id="p7Status">Offline</span>
                 </div>
                 <div class="pump-body">
