@@ -2428,13 +2428,13 @@ REPORTS_TEMPLATE = '''
                     <label>Pump</label>
                     <select id="pumpSelect">
                         <option value="all">All Pumps</option>
-                        <option value="1">Line 7 Blow Mould</option>
-                        <option value="2">Line 7 Blow Mould Spare</option>
-                        <option value="3">Greenfield LV/UPS/BRFC/ACU</option>
-                        <option value="4">Can Line UPS Room AHU2</option>
-                        <option value="5">Line 3&5 UPS Fan Coil Units</option>
-                        <option value="6">Can Line UPS Room AHU 1</option>
-                        <option value="7">Greenfield LV/UPS Room AHU 1&2</option>
+                        <option value="1">LINE 3&5 UPS FAN COIL UNITS</option>
+                        <option value="2">CAN Line UPS Room AHU 1</option>
+                        <option value="3">GREENFIELD LV UPS ROOM</option>
+                        <option value="4">CAN LINE UPS ROOM AHU 2</option>
+                        <option value="5">LINE 7 BLOW MOULD SPARE</option>
+                        <option value="6">GREENFIELD LV UPS ROOM AHU & 2</option>
+                        <option value="7">LINE 7 BLOWMOULD</option>
                     </select>
                 </div>
                 <div class="filter-group">
